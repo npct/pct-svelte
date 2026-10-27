@@ -69,7 +69,9 @@
           <div class="border-t border-slate-100 pt-2">
             <div class="flex items-center justify-between text-[11px] font-medium text-slate-600 mb-1.5">
               <span>Desire Lines (Cyclists / day)</span>
-              <span class="text-[10px] text-sky-600 font-mono">Top {appState.n}</span>
+              <span class="text-[10px] text-sky-600 font-mono">
+                {appState.freezeLines ? `Frozen (${appState.frozenLineCount})` : `Top ${appState.n}`}
+              </span>
             </div>
             <div class="flex items-center justify-between gap-2 px-1">
               {#each desireRamp as step}
@@ -90,7 +92,12 @@
         <!-- Fast / Quiet Routes Legend -->
         {#if appState.isLayerActive('fast') || appState.isLayerActive('quiet')}
           <div class="border-t border-slate-100 pt-2 space-y-1.5">
-            <div class="text-[11px] font-medium text-slate-600">Routes</div>
+            <div class="flex items-center justify-between text-[11px] font-medium text-slate-600">
+              <span>Routes</span>
+              <span class="text-[10px] text-sky-600 font-mono">
+                {appState.freezeLines ? `Frozen (${appState.frozenLineCount})` : `Top ${appState.n}`}
+              </span>
+            </div>
             <div class="space-y-1">
               {#if appState.isLayerActive('fast')}
                 <div class="flex items-center gap-2">
@@ -100,7 +107,7 @@
               {/if}
               {#if appState.isLayerActive('quiet')}
                 <div class="flex items-center gap-2">
-                  <span class="h-1 w-5 rounded bg-[#006400]"></span>
+                  <span class="w-5 border-b-2 border-dashed border-[#006400]"></span>
                   <span class="text-[11px] text-slate-600">Quieter Route (Low-traffic / greenway)</span>
                 </div>
               {/if}

@@ -51,6 +51,10 @@
   <div class="relative border-b border-slate-100 bg-white px-6 py-4">
     <a
       href="/"
+      onclick={(e) => {
+        e.preventDefault();
+        appState.setRegion('');
+      }}
       aria-label="Propensity to Cycle Tool — back to the regional map"
       title="Back to the regional map"
       class="block"

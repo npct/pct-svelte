@@ -207,13 +207,17 @@ export class AppStateManager {
    */
   public openRegionFromLanding(slug: string) {
     const capabilities = this.regionDataManifest[slug] ?? {};
-    const hasLines = Boolean(capabilities.desire_lines || capabilities.routes_fast);
-    const purpose = hasLines ? this.landingPurpose : 'commute';
+    const hasSchool = Boolean(capabilities.school_zones);
+    const hasCommuteLines = Boolean(capabilities.desire_lines || capabilities.routes_fast);
+    const purpose: Purpose =
+      this.landingPurpose === 'school'
+        ? (hasSchool ? 'school' : 'commute')
+        : (hasCommuteLines ? this.landingPurpose : 'commute');
     let scenario = this.landingScenario;
     const valid = scenariosForPurpose(purpose).map((s) => s.id as Scenario);
     if (!valid.includes(scenario)) scenario = 'base';
     const geography: Geography = purpose === 'school' ? 'lsoa' : 'msoa';
-    window.location.hash = `?r=${slug}&purpose=${purpose}&scenario=${scenario}&geography=${geography}&layers=zones`;
+    window.location.hash = `r=${slug}&purpose=${purpose}&scenario=${scenario}&geography=${geography}&layers=zones`;
   }
 
   // Region metadata (loaded from the data release): pretty names + fit views
@@ -292,6 +296,10 @@ export class AppStateManager {
 
   public setRegion(region: string) {
     if (this.region === region) return;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     this.region = region;
     this.setFreezeLines(false);
     // Back to the landing page (empty region): reset the URL so the next
@@ -302,7 +310,12 @@ export class AppStateManager {
     }
     // Reset to what the region's data actually supports (manifest from the release).
     const capabilities = this.regionDataManifest[region] ?? {};
-    if (!capabilities.desire_lines && !capabilities.routes_fast) {
+    if (this.purpose === 'school' && this.manifestHasAnyEntry && !capabilities.school_zones) {
+      this.purpose = 'commute';
+      this.geography = 'msoa';
+      if (this.scenario === 'cambridge') this.scenario = 'base';
+      this.layers = ['zones'];
+    } else if (!capabilities.desire_lines && !capabilities.routes_fast && this.manifestHasAnyEntry) {
       this.purpose = 'commute';
       this.geography = 'msoa';
       if (this.scenario === 'cambridge') this.scenario = 'base';
