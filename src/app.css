@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* White tabular popups to mirror pct-shiny / Leaflet's information style.
+   High specificity is intentional: it must override MapLibre's own defaults and
+   stale HMR-injected style order. */
+html body .maplibregl-popup .maplibregl-popup-content {
+  background-color: #ffffff !important;
+  color: #111111 !important;
+  border-radius: 3px !important;
+  padding: 0.7rem 0.85rem !important;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid #999999 !important;
+  font-family: Arial, sans-serif !important;
+  min-width: 300px !important;
+  max-width: 320px !important;
+}
+
+html body .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #ffffff !important; }
+html body .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #ffffff !important; }
+html body .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #ffffff !important; }
+html body .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #ffffff !important; }
+
+html body .maplibregl-popup-close-button {
+  color: #333333 !important;
+  padding: 2px 6px !important;
+  font-size: 16px !important;
+}
+html body .maplibregl-popup-close-button:hover {
+  color: #000000 !important;
+  background: #eeeeee !important;
+}
+
+/* Custom slim scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
