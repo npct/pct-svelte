@@ -1,0 +1,65 @@
+{
+  "dataset": "PCT West Yorkshire",
+  "files": [
+    {
+      "file": "commute/lsoa/desire_lines.pmtiles",
+      "bytes": 41487498
+    },
+    {
+      "file": "commute/lsoa/rnet.pmtiles",
+      "bytes": 3572836
+    },
+    {
+      "file": "commute/lsoa/routes_fast.pmtiles",
+      "bytes": 88667435
+    },
+    {
+      "file": "commute/lsoa/routes_quiet.pmtiles",
+      "bytes": 89545336
+    },
+    {
+      "file": "commute/lsoa/zones.geojson",
+      "bytes": 2029324
+    },
+    {
+      "file": "commute/lsoa/zones.pmtiles",
+      "bytes": 2641832
+    },
+    {
+      "file": "commute/msoa/desire_lines.pmtiles",
+      "bytes": 17307472
+    },
+    {
+      "file": "commute/msoa/rnet.pmtiles",
+      "bytes": 3572836
+    },
+    {
+      "file": "commute/msoa/routes_fast.pmtiles",
+      "bytes": 37758619
+    },
+    {
+      "file": "commute/msoa/routes_quiet.pmtiles",
+      "bytes": 38660626
+    },
+    {
+      "file": "commute/msoa/zones.geojson",
+      "bytes": 535667
+    },
+    {
+      "file": "commute/msoa/zones.pmtiles",
+      "bytes": 857661
+    },
+    {
+      "file": "school/lsoa/school_destinations.pmtiles",
+      "bytes": 255695
+    },
+    {
+      "file": "school/lsoa/school_rnet.pmtiles",
+      "bytes": 2954984
+    },
+    {
+      "file": "school/lsoa/school_zones.pmtiles",
+      "bytes": 1257607
+    }
+  ]
+}
