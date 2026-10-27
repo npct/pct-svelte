@@ -76,7 +76,7 @@
   interface LineKindConfig {
     sourceId: string;
     sourceLayer: string;
-    baseIds: [string, string];
+    baseLayerId: string;
     viewportSourceId: string;
     viewportIds: [string, string];
     opacity: number; // pct-shiny: 0.8 straight lines, 0.5 routes
@@ -87,7 +87,7 @@
     desire: {
       sourceId: 'desire-source',
       sourceLayer: 'desire_lines',
-      baseIds: ['desire-casing', 'desire-lines'],
+      baseLayerId: 'desire-lines',
       viewportSourceId: 'pct-vp-desire-source',
       viewportIds: ['pct-vp-desire-casing', 'pct-vp-desire-lines'],
       opacity: 0.85,
@@ -96,7 +96,7 @@
     fast: {
       sourceId: 'routes-fast-source',
       sourceLayer: 'routes_fast',
-      baseIds: ['routes-fast-casing', 'routes-fast-lines'],
+      baseLayerId: 'routes-fast-lines',
       viewportSourceId: 'pct-vp-fast-source',
       viewportIds: ['pct-vp-fast-casing', 'pct-vp-fast-lines'],
       opacity: 0.5,
@@ -105,7 +105,7 @@
     quiet: {
       sourceId: 'routes-quiet-source',
       sourceLayer: 'routes_quiet',
-      baseIds: ['routes-quiet-casing', 'routes-quiet-lines'],
+      baseLayerId: 'routes-quiet-lines',
       viewportSourceId: 'pct-vp-quiet-source',
       viewportIds: ['pct-vp-quiet-casing', 'pct-vp-quiet-lines'],
       opacity: 0.5,
@@ -199,33 +199,47 @@
     const bounds = map.getBounds();
     const countProperty = getScenarioCyclistsProperty(appState.scenario, appState.purpose);
     const seen = new Set<string>();
-    return map.querySourceFeatures(cfg.sourceId, { sourceLayer: cfg.sourceLayer })
-      .filter((feature) => geometryIntersectsBounds(feature.geometry, bounds))
-      .filter((feature) => {
-        const id = `${feature.properties?.geo_code1 ?? ''}|${feature.properties?.geo_code2 ?? ''}`;
-        if (seen.has(id)) return false;
-        seen.add(id);
-        return Number(feature.properties?.[countProperty] ?? feature.properties?.bicycle ?? 0) > 0;
-      })
-      .sort((a, b) => Number(b.properties?.[countProperty] ?? b.properties?.bicycle ?? 0) - Number(a.properties?.[countProperty] ?? a.properties?.bicycle ?? 0))
-      .slice(0, limit)
-      .map((feature) => ({
+    const raw = map.querySourceFeatures(cfg.sourceId, { sourceLayer: cfg.sourceLayer });
+    const deduplicated: any[] = [];
+    for (const feature of raw) {
+      const count = Number(feature.properties?.[countProperty] ?? feature.properties?.bicycle ?? 0);
+      if (count <= 0) continue;
+      const id = `${feature.properties?.geo_code1 ?? ''}|${feature.properties?.geo_code2 ?? ''}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      deduplicated.push(feature);
+    }
+    deduplicated.sort(
+      (a, b) =>
+        Number(b.properties?.[countProperty] ?? b.properties?.bicycle ?? 0) -
+        Number(a.properties?.[countProperty] ?? a.properties?.bicycle ?? 0)
+    );
+    // Decode lazy feature.geometry only for top-ranked candidates until `limit` is reached
+    const selected: any[] = [];
+    for (const feature of deduplicated) {
+      if (selected.length >= limit) break;
+      const geom = feature.geometry;
+      if (!geometryIntersectsBounds(geom, bounds)) continue;
+      selected.push({
         type: 'Feature' as const,
         properties: { ...feature.properties, __pct_style: kind },
-        geometry: feature.geometry
-      }));
+        geometry: geom
+      });
+    }
+    return selected;
   }
 
   /** Rank loaded candidates inside the current viewport by scenario cyclists and
    *  keep the top N, matching pct-shiny's sort_lines() behaviour. */
   function refreshViewportLines(map: maplibregl.Map, kind: LineKind, force = false) {
     const cfg = LINE_KINDS[kind];
-    if (!map.getLayer(cfg.baseIds[1]) || appState.freezeLines) return;
+    if (!map.getLayer(cfg.baseLayerId) || appState.freezeLines) return;
     const bounds = map.getBounds();
     const key = [
       appState.region,
       appState.purpose,
       appState.geography,
+      appState.basemap,
       bounds.getWest(),
       bounds.getSouth(),
       bounds.getEast(),
@@ -235,7 +249,8 @@
     ]
       .map((value) => typeof value === 'number' ? value.toFixed(4) : value)
       .join('|');
-    if (!force && key === viewportKeys[kind]) return;
+    const existingSource = map.getSource(cfg.viewportSourceId) as maplibregl.GeoJSONSource | undefined;
+    if (!force && existingSource && key === viewportKeys[kind]) return;
 
     const candidates = queryRankedViewportCandidates(map, kind, appState.n);
     viewportFeatures[kind] = candidates;
@@ -250,7 +265,6 @@
 
     const lineWidthExpr = kind === 'desire' ? (desireLineWidth as any) : (flowLineWidth as any);
     const lineColorExpr = kind === 'desire' ? (desireLineColor as any) : (cfg.color as any);
-    const existingSource = map.getSource(cfg.viewportSourceId) as maplibregl.GeoJSONSource | undefined;
 
     if (existingSource) {
       existingSource.setData({ type: 'FeatureCollection', features: candidates } as any);
@@ -459,8 +473,9 @@
     const syncLoadedSources = () => {
       if (appState.freezeLines) {
         const activeKinds = ALL_LINE_KINDS.filter((kind) => appState.isLayerActive(kind));
-        if (activeKinds.length && activeKinds.every((k) => frozenCandidatesByKind[k].length === 0)) {
-          renderFrozenLines(map, true);
+        const needsCapture = activeKinds.every((k) => frozenCandidatesByKind[k].length === 0);
+        if (activeKinds.length && (needsCapture || !map.getSource(FROZEN_SOURCE_ID))) {
+          renderFrozenLines(map, needsCapture);
         }
         return;
       }
@@ -788,21 +803,11 @@
           url={getPMTilesUrl(regionFile('routes_fast'))}
         >
           <LineLayer
-            id="routes-fast-casing"
-            sourceLayer="routes_fast"
-            paint={{
-              'line-color': '#ffffff',
-              'line-width': ['+', flowLineWidth as any, 1.5],
-              'line-opacity': 0
-            }}
-          />
-          <LineLayer
             id="routes-fast-lines"
             sourceLayer="routes_fast"
+            filter={['==', ['get', 'geo_code1'], '__none__'] as any}
             paint={{
-              'line-color': '#800080',
-              'line-width': flowLineWidth as any,
-              'line-opacity': 0,
+              'line-opacity': 0
             }}
           />
         </VectorTileSource>
@@ -817,22 +822,11 @@
           url={getPMTilesUrl(regionFile('routes_quiet'))}
         >
           <LineLayer
-            id="routes-quiet-casing"
-            sourceLayer="routes_quiet"
-            paint={{
-              'line-color': '#ffffff',
-              'line-width': ['+', flowLineWidth as any, 1.5],
-              'line-opacity': 0
-            }}
-          />
-          <LineLayer
             id="routes-quiet-lines"
             sourceLayer="routes_quiet"
+            filter={['==', ['get', 'geo_code1'], '__none__'] as any}
             paint={{
-              'line-color': '#006400',
-              'line-width': flowLineWidth as any,
-              'line-opacity': 0,
-              'line-dasharray': [2, 1],
+              'line-opacity': 0
             }}
           />
         </VectorTileSource>
@@ -847,23 +841,11 @@
           url={getPMTilesUrl(regionFile('desire_lines'))}
         >
           <LineLayer
-            id="desire-casing"
-            sourceLayer="desire_lines"
-            filter={desireFilter as any}
-            paint={{
-              'line-color': '#ffffff',
-              'line-width': ['+', desireLineWidth as any, 1.5],
-              'line-opacity': 0
-            }}
-          />
-          <LineLayer
             id="desire-lines"
             sourceLayer="desire_lines"
-            filter={desireFilter as any}
+            filter={['==', ['get', 'geo_code1'], '__none__'] as any}
             paint={{
-              'line-color': desireLineColor as any,
-              'line-width': desireLineWidth as any,
-              'line-opacity': 0,
+              'line-opacity': 0
             }}
           />
         </VectorTileSource>

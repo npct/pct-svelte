@@ -1,15 +1,17 @@
 import type { StyleSpecification, ExpressionSpecification } from 'maplibre-gl';
 import type { BasemapId, Purpose, Scenario } from './types';
 
-export const BASEMAP_TILES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
+export const BASEMAP_TILES: Record<BasemapId, { tiles: string[]; labelTiles?: string[]; attribution: string; maxzoom?: number }> = {
   positron: {
     tiles: [
-      'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-      'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-      'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-      'https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
     ],
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    labelTiles: [
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+    ],
+    attribution: 'Tiles &copy; <a href="https://www.esri.com" target="_blank">Esri</a> &mdash; Esri, DeLorme, NAVTEQ',
     maxzoom: 19
   },
   satellite: {
@@ -32,31 +34,55 @@ export const BASEMAP_TILES: Record<BasemapId, { tiles: string[]; attribution: st
 
 export function getBasemapStyle(basemapId: BasemapId): StyleSpecification {
   const config = BASEMAP_TILES[basemapId] || BASEMAP_TILES.positron;
+  const maxzoom = config.maxzoom || 19;
+  const sources: StyleSpecification['sources'] = {
+    'raster-basemap': {
+      type: 'raster',
+      tiles: config.tiles,
+      tileSize: 256,
+      attribution: config.attribution,
+      maxzoom
+    }
+  };
+  const layers: StyleSpecification['layers'] = [
+    {
+      id: 'raster-basemap-layer',
+      type: 'raster',
+      source: 'raster-basemap',
+      minzoom: 0,
+      maxzoom: maxzoom + 1,
+      paint: {
+        'raster-opacity': 1,
+        'raster-fade-duration': 100
+      }
+    }
+  ];
+
+  if (config.labelTiles?.length) {
+    sources['raster-basemap-labels'] = {
+      type: 'raster',
+      tiles: config.labelTiles,
+      tileSize: 256,
+      maxzoom
+    };
+    layers.push({
+      id: 'raster-basemap-labels-layer',
+      type: 'raster',
+      source: 'raster-basemap-labels',
+      minzoom: 0,
+      maxzoom: maxzoom + 1,
+      paint: {
+        'raster-opacity': 1,
+        'raster-fade-duration': 100
+      }
+    });
+  }
+
   return {
     version: 8,
     name: `PCT-${basemapId}`,
-    sources: {
-      'raster-basemap': {
-        type: 'raster',
-        tiles: config.tiles,
-        tileSize: 256,
-        attribution: config.attribution,
-        maxzoom: config.maxzoom || 19
-      }
-    },
-    layers: [
-      {
-        id: 'raster-basemap-layer',
-        type: 'raster',
-        source: 'raster-basemap',
-        minzoom: 0,
-        maxzoom: (config.maxzoom || 19) + 1,
-        paint: {
-          'raster-opacity': 1,
-          'raster-fade-duration': 100
-        }
-      }
-    ]
+    sources,
+    layers
   };
 }
 

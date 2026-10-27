@@ -67,9 +67,9 @@
         <!-- Desire Lines Legend -->
         {#if appState.isLayerActive('desire')}
           <div class="border-t border-slate-100 pt-2">
-            <div class="flex items-center justify-between text-[11px] font-medium text-slate-600 mb-1.5">
+            <div class="flex items-center justify-between gap-3 text-[11px] font-medium text-slate-600 mb-1.5">
               <span>Desire Lines (Cyclists / day)</span>
-              <span class="text-[10px] text-sky-600 font-mono">
+              <span class="shrink-0 text-[10px] text-sky-600 font-mono">
                 {appState.freezeLines ? `Frozen (${appState.frozenLineCount})` : `Top ${appState.n}`}
               </span>
             </div>
@@ -92,9 +92,9 @@
         <!-- Fast / Quiet Routes Legend -->
         {#if appState.isLayerActive('fast') || appState.isLayerActive('quiet')}
           <div class="border-t border-slate-100 pt-2 space-y-1.5">
-            <div class="flex items-center justify-between text-[11px] font-medium text-slate-600">
+            <div class="flex items-center justify-between gap-3 text-[11px] font-medium text-slate-600">
               <span>Routes</span>
-              <span class="text-[10px] text-sky-600 font-mono">
+              <span class="shrink-0 text-[10px] text-sky-600 font-mono">
                 {appState.freezeLines ? `Frozen (${appState.frozenLineCount})` : `Top ${appState.n}`}
               </span>
             </div>
@@ -132,6 +132,16 @@
             <p class="mt-1 text-[10px] leading-snug text-slate-500">
               Estimated cyclists on each LSOA route segment under {currentScenarioName}.
             </p>
+          </div>
+        {/if}
+
+        <!-- School Destinations Legend -->
+        {#if appState.purpose === 'school' && appState.isLayerActive('destinations')}
+          <div class="border-t border-slate-100 pt-2">
+            <div class="flex items-center gap-2">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#006400] ring-2 ring-white shadow-xs"></span>
+              <span class="text-[11px] font-medium text-slate-600">School destination</span>
+            </div>
           </div>
         {/if}
 

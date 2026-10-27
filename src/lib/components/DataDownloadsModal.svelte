@@ -34,6 +34,7 @@
     return [
       { label: 'School zones (GeoJSON)', file: `${BASE}/school/lsoa/${region}/z.geojson`, note: 'LSOA school travel data' },
       { label: 'School destinations (GeoJSON)', file: `${BASE}/school/lsoa/${region}/d.geojson` },
+      { label: 'School route network (GeoJSON)', file: `${BASE}/school/lsoa/${region}/rnet_full.geojson` },
       { label: 'School zone attributes (CSV)', file: `${BASE}/school/lsoa/${region}/z_attributes.csv`, note: 'codebook' },
       { label: 'School destination attributes (CSV)', file: `${BASE}/school/lsoa/${region}/d_attributes.csv`, note: 'codebook' }
     ];
