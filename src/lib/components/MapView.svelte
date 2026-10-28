@@ -16,6 +16,7 @@
   import { initPMTilesProtocol, getPMTilesUrl } from '../pmtiles';
   import {
     getBasemapStyle,
+    applyBasemapVisibility,
     getZoneFillColorExpression,
     getDesireLineWidthExpression,
     getDesireLineColorExpression,
@@ -23,11 +24,13 @@
     getRNetLineWidthExpression,
     getRNetLineColorExpression,
     getScenarioCyclistExpression,
-    getScenarioCyclistsProperty
+    getScenarioCyclistsProperty,
+    getLineOrderValue
   } from '../mapStyles';
   import type { FeatureHoverInfo } from '../types';
   import HoverPopup from './HoverPopup.svelte';
   import Legend from './Legend.svelte';
+  import ImdTileOverlay from './ImdTileOverlay.svelte';
 
   // Initialize PMTiles protocol prior to MapLibre initialization
   initPMTilesProtocol();
@@ -42,8 +45,20 @@
     return point.x > mapInstance.getCanvas().width - 380 ? 'right' : 'left';
   });
 
-  // Derived basemap style
-  const basemapStyle = $derived(getBasemapStyle(appState.basemap));
+  // Stable initial basemap style containing all raster basemap layers;
+  // switching `appState.basemap` toggles layer visibility without resetting sources.
+  const basemapStyle = getBasemapStyle(appState.basemap);
+
+  $effect(() => {
+    const map = mapInstance;
+    const basemap = appState.basemap;
+    if (!map) return;
+    if (map.isStyleLoaded()) {
+      applyBasemapVisibility(map, basemap);
+    } else {
+      map.once('idle', () => applyBasemapVisibility(map, basemap));
+    }
+  });
 
   // Dataset-dependent asset paths: /data/<purpose>/<geography>/<file>
   const datasetKey = $derived(`${appState.purpose}/${appState.geography}`);
@@ -209,10 +224,13 @@
       seen.add(id);
       deduplicated.push(feature);
     }
+    const order = appState.lineOrder;
+    const scen = appState.scenario;
+    const purp = appState.purpose;
     deduplicated.sort(
       (a, b) =>
-        Number(b.properties?.[countProperty] ?? b.properties?.bicycle ?? 0) -
-        Number(a.properties?.[countProperty] ?? a.properties?.bicycle ?? 0)
+        getLineOrderValue(b.properties, scen, purp, order) -
+        getLineOrderValue(a.properties, scen, purp, order)
     );
     // Decode lazy feature.geometry only for top-ranked candidates until `limit` is reached
     const selected: any[] = [];
@@ -245,6 +263,7 @@
       bounds.getEast(),
       bounds.getNorth(),
       appState.scenario,
+      appState.lineOrder,
       appState.n
     ]
       .map((value) => typeof value === 'number' ? value.toFixed(4) : value)
@@ -327,7 +346,7 @@
   function captureFrozenCandidates(map: maplibregl.Map) {
     for (const kind of ALL_LINE_KINDS) {
       if (appState.isLayerActive(kind)) {
-        const queried = queryRankedViewportCandidates(map, kind, 100);
+        const queried = queryRankedViewportCandidates(map, kind, 200);
         frozenCandidatesByKind[kind] = queried.length > 0 ? queried : [...viewportFeatures[kind]];
       } else {
         frozenCandidatesByKind[kind] = [];
@@ -340,12 +359,18 @@
       captureFrozenCandidates(map);
     }
 
-    const countProperty = getScenarioCyclistsProperty(appState.scenario, appState.purpose);
+    const order = appState.lineOrder;
+    const scen = appState.scenario;
+    const purp = appState.purpose;
     const activeKinds = ALL_LINE_KINDS.filter((kind) => appState.isLayerActive(kind));
     const features = activeKinds.flatMap((kind) => {
       const pool = frozenCandidatesByKind[kind] ?? [];
       return [...pool]
-        .sort((a, b) => Number(b.properties?.[countProperty] ?? b.properties?.bicycle ?? 0) - Number(a.properties?.[countProperty] ?? a.properties?.bicycle ?? 0))
+        .sort(
+          (a, b) =>
+            getLineOrderValue(b.properties, scen, purp, order) -
+            getLineOrderValue(a.properties, scen, purp, order)
+        )
         .slice(0, appState.n);
     });
 
@@ -434,6 +459,7 @@
     const frozen = appState.freezeLines;
     const revision = appState.freezeRevision;
     void appState.scenario;
+    void appState.lineOrder;
     void appState.n;
     void appState.basemap;
     void appState.layers;
@@ -660,13 +686,16 @@
 </script>
 
 <div class="relative h-full w-full bg-slate-200">
+  {#if appState.basemap === 'imd'}
+    <ImdTileOverlay map={mapInstance} />
+  {/if}
   <MapLibre
     bind:map={mapInstance}
     style={basemapStyle}
     center={[appState.lng, appState.lat]}
     zoom={appState.zoom}
     cursor={mapCursor}
-    class="h-full w-full"
+    class="relative z-10 h-full w-full"
     onmoveend={handleMoveEnd}
     onerror={(e) => {
       console.warn('[MapLibre Error]', e);
@@ -754,6 +783,7 @@
           <LineLayer
             id="rnet-casing"
             sourceLayer="rnet"
+            filter={['>', getScenarioCyclistExpression(appState.scenario, appState.purpose) as any, 0] as any}
             paint={{
               'line-color': '#ffffff',
               'line-width': ['+', rnetLineWidth as any, 2],
@@ -763,6 +793,7 @@
           <LineLayer
             id="rnet-lines"
             sourceLayer="rnet"
+            filter={['>', getScenarioCyclistExpression(appState.scenario, appState.purpose) as any, 0] as any}
             paint={{
               'line-color': rnetLineColor as any,
               'line-width': rnetLineWidth as any,

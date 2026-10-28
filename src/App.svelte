@@ -4,6 +4,7 @@
   import ToastContainer from './lib/components/ToastContainer.svelte';
   import InfoModal from './lib/components/InfoModal.svelte';
   import DataDownloadsModal from './lib/components/DataDownloadsModal.svelte';
+  import RegionStatsModal from './lib/components/RegionStatsModal.svelte';
   import Landing from './lib/components/Landing.svelte';
   import { appState } from './lib/state.svelte';
 
@@ -31,6 +32,9 @@
 
     <!-- Data & Downloads Modal -->
     <DataDownloadsModal />
+
+    <!-- Region Summary Statistics Modal -->
+    <RegionStatsModal />
   </main>
 {:else}
   <!-- Landing page: welcome + regions choropleth (no region selected yet) -->

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { appState, scenariosForPurpose } from '../state.svelte';
+  import { IMD_COLORS, IMD_LABELS } from '../mapStyles';
   import ZoneLegendRamp from './ZoneLegendRamp.svelte';
 
   let collapsed = $state(false);
@@ -60,7 +61,24 @@
             <div class="flex items-center justify-between text-[11px] font-medium text-slate-600 mb-1">
               <span>{appState.purpose === 'school' ? '% cycling to school' : '% cycling to work'}</span>
             </div>
-            <ZoneLegendRamp />
+            <ZoneLegendRamp purpose={appState.purpose} />
+          </div>
+        {/if}
+
+        <!-- Index of Multiple Deprivation Legend -->
+        {#if appState.basemap === 'imd'}
+          <div class={appState.isLayerActive('zones') ? 'border-t border-slate-100 pt-2' : ''}>
+            <div class="flex items-center justify-between text-[11px] font-medium text-slate-600 mb-1">
+              <span>Index of Multiple Deprivation</span>
+            </div>
+            <div class="space-y-px">
+              {#each IMD_COLORS as color, i}
+                <div class="flex items-center gap-1.5">
+                  <span class="h-3 w-6 border border-slate-200" style="background-color: {color}; opacity: 0.75;"></span>
+                  <span class="text-[9px] text-slate-600 font-mono">{IMD_LABELS[i]}</span>
+                </div>
+              {/each}
+            </div>
           </div>
         {/if}
 
@@ -145,7 +163,7 @@
           </div>
         {/if}
 
-        {#if appState.layers.length === 0}
+        {#if appState.layers.length === 0 && appState.basemap !== 'imd'}
           <p class="text-[11px] text-slate-400 italic py-1">
             No active map layers. Enable layers in the sidebar panel.
           </p>

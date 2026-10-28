@@ -15,6 +15,7 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
+    if (appState.statsModalOpen || appState.infoModalOpen || appState.downloadsOpen) return;
     if (e.key === '[' || (e.key === 'Escape' && appState.sidebarOpen)) {
       appState.toggleSidebar();
     }
@@ -112,6 +113,18 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
       </svg>
       <span>Share View</span>
+    </button>
+
+    <button
+      type="button"
+      onclick={() => appState.statsModalOpen = true}
+      class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+      title="Region summary statistics and scenario comparison"
+    >
+      <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 16v-5m5 5V8m5 8v-3" />
+      </svg>
+      <span>Stats</span>
     </button>
 
     <button
