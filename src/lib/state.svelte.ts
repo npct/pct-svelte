@@ -1,4 +1,4 @@
-import type { AppState, BasemapId, Geography, LayerId, Purpose, Scenario, ScenarioOption } from './types';
+import type { AppState, BasemapId, Geography, LayerId, LineOrder, Purpose, Scenario, ScenarioOption } from './types';
 
 export const SCENARIOS: ScenarioOption[] = [
   {
@@ -138,8 +138,13 @@ export const LAYERS: { id: LayerId; name: string; description: string; color: st
 export const BASEMAPS: { id: BasemapId; name: string; description: string }[] = [
   {
     id: 'positron',
-    name: 'Positron',
-    description: 'Light, minimal Carto base'
+    name: 'Roadmap (Black & White)',
+    description: 'Light, minimal roadmap base'
+  },
+  {
+    id: 'cyclosm',
+    name: 'Roadmap (OpenCycleMap)',
+    description: 'Dedicated cycle infrastructure map'
   },
   {
     id: 'satellite',
@@ -147,10 +152,22 @@ export const BASEMAPS: { id: BasemapId; name: string; description: string }[] = 
     description: 'Esri World Imagery'
   },
   {
-    id: 'cyclosm',
-    name: 'CyclOSM',
-    description: 'Dedicated cycle map'
+    id: 'hilliness',
+    name: 'Hilliness',
+    description: 'Esri World Shaded Relief terrain'
+  },
+  {
+    id: 'imd',
+    name: 'Index of Deprivation',
+    description: 'CDRC English Index of Multiple Deprivation deciles'
   }
+];
+
+export const LINE_ORDERS: { id: LineOrder; name: string }[] = [
+  { id: 'slc', name: 'Number of cyclists' },
+  { id: 'sic', name: 'Increase in cyclists' },
+  { id: 'sivaluecomb', name: 'Health economic gain (YLLs + sick leave)' },
+  { id: 'sico2', name: 'Reduction in CO₂ / car distance' }
 ];
 
 const DEFAULT_WEST_YORKSHIRE: AppState = {
@@ -163,7 +180,8 @@ const DEFAULT_WEST_YORKSHIRE: AppState = {
   scenario: 'base',
   layers: ['zones'],
   basemap: 'positron',
-  n: 30
+  n: 30,
+  lineOrder: 'slc'
 };
 
 export class AppStateManager {
@@ -177,6 +195,7 @@ export class AppStateManager {
   layers = $state<LayerId[]>([...DEFAULT_WEST_YORKSHIRE.layers]);
   basemap = $state<BasemapId>(DEFAULT_WEST_YORKSHIRE.basemap);
   n = $state<number>(DEFAULT_WEST_YORKSHIRE.n);
+  lineOrder = $state<LineOrder>(DEFAULT_WEST_YORKSHIRE.lineOrder);
   
   freezeLines = $state<boolean>(false);
   freezeRevision = $state<number>(0);
@@ -185,6 +204,7 @@ export class AppStateManager {
   // UI state
   sidebarOpen = $state<boolean>(true);
   infoModalOpen = $state<boolean>(false);
+  statsModalOpen = $state<boolean>(false);
   downloadsOpen = $state<boolean>(false);
   landingPurpose = $state<'commute' | 'school'>('commute');
   landingScenario = $state<Scenario>('base');
@@ -207,13 +227,17 @@ export class AppStateManager {
    */
   public openRegionFromLanding(slug: string) {
     const capabilities = this.regionDataManifest[slug] ?? {};
-    const hasLines = Boolean(capabilities.desire_lines || capabilities.routes_fast);
-    const purpose = hasLines ? this.landingPurpose : 'commute';
+    const hasSchool = Boolean(capabilities.school_zones);
+    const hasCommuteLines = Boolean(capabilities.desire_lines || capabilities.routes_fast);
+    const purpose: Purpose =
+      this.landingPurpose === 'school'
+        ? (hasSchool ? 'school' : 'commute')
+        : (hasCommuteLines ? this.landingPurpose : 'commute');
     let scenario = this.landingScenario;
     const valid = scenariosForPurpose(purpose).map((s) => s.id as Scenario);
     if (!valid.includes(scenario)) scenario = 'base';
     const geography: Geography = purpose === 'school' ? 'lsoa' : 'msoa';
-    window.location.hash = `?r=${slug}&purpose=${purpose}&scenario=${scenario}&geography=${geography}&layers=zones`;
+    window.location.hash = `r=${slug}&purpose=${purpose}&scenario=${scenario}&geography=${geography}&layers=zones`;
   }
 
   // Region metadata (loaded from the data release): pretty names + fit views
@@ -292,6 +316,10 @@ export class AppStateManager {
 
   public setRegion(region: string) {
     if (this.region === region) return;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     this.region = region;
     this.setFreezeLines(false);
     // Back to the landing page (empty region): reset the URL so the next
@@ -302,7 +330,12 @@ export class AppStateManager {
     }
     // Reset to what the region's data actually supports (manifest from the release).
     const capabilities = this.regionDataManifest[region] ?? {};
-    if (!capabilities.desire_lines && !capabilities.routes_fast) {
+    if (this.purpose === 'school' && this.manifestHasAnyEntry && !capabilities.school_zones) {
+      this.purpose = 'commute';
+      this.geography = 'msoa';
+      if (this.scenario === 'cambridge') this.scenario = 'base';
+      this.layers = ['zones'];
+    } else if (!capabilities.desire_lines && !capabilities.routes_fast && this.manifestHasAnyEntry) {
       this.purpose = 'commute';
       this.geography = 'msoa';
       if (this.scenario === 'cambridge') this.scenario = 'base';
@@ -390,15 +423,24 @@ export class AppStateManager {
         }
         if (hashParams.has('basemap')) {
           const b = hashParams.get('basemap') as BasemapId;
-          if (['positron', 'satellite', 'cyclosm'].includes(b)) {
+          if (['positron', 'satellite', 'cyclosm', 'hilliness', 'imd'].includes(b)) {
             this.basemap = b;
           }
         }
         if (hashParams.has('n')) {
           const parsedN = parseInt(hashParams.get('n')!, 10);
-          if (!isNaN(parsedN) && parsedN >= 10 && parsedN <= 100) {
+          if (!isNaN(parsedN) && parsedN >= 1 && parsedN <= 200) {
             this.n = parsedN;
           }
+        }
+        if (hashParams.has('order')) {
+          const o = hashParams.get('order') as LineOrder;
+          if (['slc', 'sic', 'sivaluecomb', 'sico2'].includes(o)) {
+            this.lineOrder = o;
+          }
+        }
+        if (this.scenario === 'base') {
+          this.lineOrder = 'slc';
         }
       }
     } finally {
@@ -430,6 +472,9 @@ export class AppStateManager {
       params.set('layers', this.layers.join(','));
       params.set('basemap', this.basemap);
       params.set('n', this.n.toString());
+      if (this.lineOrder !== 'slc') {
+        params.set('order', this.lineOrder);
+      }
 
       // Canonical form is always <pathname>#<state>: a legacy ?r=… query is
       // consumed on entry and must not linger alongside the hash.
@@ -449,6 +494,14 @@ export class AppStateManager {
 
   public setScenario(scenario: Scenario) {
     this.scenario = scenario;
+    if (scenario === 'base') {
+      this.lineOrder = 'slc';
+    }
+    this.syncToUrl();
+  }
+
+  public setLineOrder(order: LineOrder) {
+    this.lineOrder = order;
     this.syncToUrl();
   }
 
@@ -483,7 +536,7 @@ export class AppStateManager {
   }
 
   public setN(n: number) {
-    this.n = Math.max(10, Math.min(100, n));
+    this.n = Math.max(1, Math.min(200, n));
     this.syncToUrl();
   }
 

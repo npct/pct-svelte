@@ -47,36 +47,47 @@
     }
     return Math.round(scaled) / f;
   };
-  // pct-shiny suppresses counts of 1-2 in school data ("1 or 2").
+  // pct-shiny suppresses counts of 1-2 in school zones/rnet ("1 or 2")
+  // and 1-5 in school destinations ("1 to 5").
   const smallCell = (value: unknown) => {
     const v = Number(value ?? 0);
     return v > 0 && v <= 2 ? '1 or 2' : fmtInt(v);
+  };
+  const smallCellDest = (value: unknown) => {
+    const v = Number(value ?? 0);
+    return v > 0 && v <= 5 ? '1 to 5' : fmtInt(v);
   };
   const pct = (part: unknown, total: unknown) => {
     const all = Number(total ?? 0);
     return all > 0 ? Math.round((Number(part ?? 0) / all) * 100) : 0;
   };
   const money = (value: unknown) => `£${Math.round(Number(value ?? 0)).toLocaleString('en-GB')}`;
+  const isNeg = (value: unknown) => Number(value ?? 0) < 0;
 
   const scenarioField = (suffix: string) => `${appState.scenario}_${suffix}`;
   const featureProps = $derived((hoverInfo?.properties ?? {}) as Record<string, unknown>);
+  const pctStyle = $derived(featureProps.__pct_style as string | undefined);
   const isZone = $derived(hoverInfo?.layerId === 'zones-fill');
-  const isDesire = $derived(hoverInfo?.layerId.includes('desire') ?? false);
-  const isFast = $derived(hoverInfo?.layerId.includes('fast') ?? false);
-  const isQuiet = $derived(hoverInfo?.layerId.includes('quiet') ?? false);
+  const isDesire = $derived((hoverInfo?.layerId.includes('desire') ?? false) || pctStyle === 'desire');
+  const isFast = $derived((hoverInfo?.layerId.includes('fast') ?? false) || pctStyle === 'fast');
+  const isQuiet = $derived((hoverInfo?.layerId.includes('quiet') ?? false) || pctStyle === 'quiet');
   const isRnet = $derived(hoverInfo?.layerId.includes('rnet') ?? false);
   const isDestination = $derived(hoverInfo?.layerId === 'school-destinations');
   const isRegion = $derived(hoverInfo?.layerId === 'regions-fill');
   const isBaseline = $derived(appState.scenario === 'base');
-  // School zone assets store scenario counts as *_sic, while the school
-  // route-network assets store route counts as *_slc. Resolve by layer so a
-  // school RNet popup does not silently display zero for a valid segment.
-  const scenarioSuffix = $derived(isSchool ? (isRnet ? 'slc' : 'sic') : 'slc');
+  // In school data, `*_sic` stores the scenario increase in cyclists while `bicycle`
+  // stores baseline cyclists; total scenario cyclists is `bicycle + *_sic` when `*_slc` is absent.
   const scenarioCyclists = $derived(
     isBaseline
       ? Number(featureProps.bicycle ?? 0)
-      : Number(featureProps[scenarioField(scenarioSuffix)] ?? featureProps[scenarioField('slc')] ?? 0)
+      : isSchool
+        ? Number(
+            featureProps[scenarioField('slc')] ??
+            (Number(featureProps.bicycle ?? 0) + Number(featureProps[scenarioField('sic')] ?? 0))
+          )
+        : Number(featureProps[scenarioField('slc')] ?? featureProps[scenarioField('sic')] ?? 0)
   );
+  const quietDetourPct = $derived((Number(featureProps.dist_rq_rf ?? 1) * 100) - 100);
 </script>
 
 <div class="pct-popup">
@@ -104,31 +115,39 @@
         {#if isBaseline}
           <tr><td>{isSchool ? 'Driven by car (baseline)' : 'Drivers (baseline)'}</td><td>{isSchool ? smallCell(featureProps.car) : fmtInt(featureProps.car_driver)} ({pct(isSchool ? featureProps.car : featureProps.car_driver, featureProps.all)}%)</td></tr>
         {:else if isSchool}
-          <tr><td>Change in cyclists</td><td>{smallCell(featureProps[scenarioField('sic')])}</td></tr>
+          <tr><td>Cyclists (scenario)</td><td>{smallCell(scenarioCyclists)} ({pct(scenarioCyclists, featureProps.all)}%)</td></tr>
+          <tr><td>Change in cyclists</td><td>{fmtInt(featureProps[scenarioField('sic')])} ({pct(featureProps[scenarioField('sic')], featureProps.all)}%)</td></tr>
           <tr><td>Change in driven by car</td><td>{fmtInt(featureProps[scenarioField('sid')])}</td></tr>
-          <tr><td>Change (% change) in active travel mMETs/child/week</td><td>{roundR(featureProps[scenarioField('simmet')])} ({pct(featureProps[scenarioField('simmet')], featureProps.baseline_at_mmet)}%)</td></tr>
+          <tr><td>Change (% change) in active travel mMETs/child/week</td><td class:neg={isNeg(featureProps[scenarioField('simmet')])}>{roundR(featureProps[scenarioField('simmet')])} ({pct(featureProps[scenarioField('simmet')], featureProps.baseline_at_mmet)}%)</td></tr>
           <tr><td>Change in CO₂e (t/yr)</td><td>{fmtOne(Number(featureProps[scenarioField('sico2')] ?? 0) / 1000)}</td></tr>
         {:else}
           <tr><td>Cyclists (scenario)</td><td>{fmtInt(scenarioCyclists)} ({pct(scenarioCyclists, featureProps.all)}%)</td></tr>
           <tr><td>Change in drivers</td><td>{fmtInt(featureProps[scenarioField('sid')])}</td></tr>
-          <tr><td>Change in YLLs/yr</td><td>{fmtTwo(featureProps[scenarioField('siyll')])} ({money(featureProps[scenarioField('sivalueyll')])})</td></tr>
-          <tr><td>Change in days sick leave/yr</td><td>{fmtOne(featureProps[scenarioField('sisickdays')])} ({money(featureProps[scenarioField('sivaluesick')])})</td></tr>
+          <tr><td>Change in YLLs/yr</td><td class:neg={isNeg(featureProps[scenarioField('sivalueyll')])}>{fmtTwo(featureProps[scenarioField('siyll')])} ({money(featureProps[scenarioField('sivalueyll')])})</td></tr>
+          <tr><td>Change in days sick leave/yr</td><td class:neg={isNeg(featureProps[scenarioField('sivaluesick')])}>{fmtOne(featureProps[scenarioField('sisickdays')])} ({money(featureProps[scenarioField('sivaluesick')])})</td></tr>
           <tr><td>Change in CO₂e (t/yr)</td><td>{fmtOne(Number(featureProps[scenarioField('sico2')] ?? 0) / 1000)}</td></tr>
         {/if}
       </tbody>
     </table>
   {:else if isDestination}
-    <div class="popup-heading">{featureProps.schoolname || 'School'}</div>
+    <div class="popup-heading">All school children going to school</div>
     <div class="popup-subheading">
       {#if isBaseline}{scenarioLabel} (baseline){:else}Scenario: {scenarioLabel}{/if}
     </div>
-    <div class="popup-place">{featureProps.phase || 'School'} · {featureProps.urn || ''}</div>
+    <div class="popup-place">{featureProps.establishmentname || featureProps.schoolname || 'School'} (urn={featureProps.urn || ''})</div>
     <table>
       <tbody>
-        <tr><td>Total school children</td><td>{smallCell(featureProps.all)}</td></tr>
-        <tr><td>Cyclists (baseline)</td><td>{smallCell(featureProps.bicycle)} ({pct(featureProps.bicycle, featureProps.all)}%)</td></tr>
-        {#if !isBaseline}
-          <tr><td>Cyclists (scenario)</td><td>{smallCell(featureProps[scenarioField('sic')])}</td></tr>
+        <tr><td>Total school children</td><td>{smallCellDest(featureProps.all)}</td></tr>
+        <tr><td>Cyclists (baseline)</td><td>{smallCellDest(featureProps.bicycle)} ({pct(featureProps.bicycle, featureProps.all)}%)</td></tr>
+        {#if isBaseline}
+          <tr><td>Driven by car (baseline)</td><td>{smallCellDest(featureProps.car ?? featureProps.car_driver)} ({pct(featureProps.car ?? featureProps.car_driver, featureProps.all)}%)</td></tr>
+        {:else}
+          <tr><td>Change in cyclists</td><td>{fmtInt(featureProps[scenarioField('sic')])} ({pct(featureProps[scenarioField('sic')], featureProps.all)}%)</td></tr>
+          <tr><td>Change in driven by car</td><td>{fmtInt(featureProps[scenarioField('sid')])}</td></tr>
+          {#if featureProps.baseline_at_mmet !== undefined}
+            <tr><td>Change (% change) in active travel mMETs/child/week</td><td class:neg={isNeg(featureProps[scenarioField('simmet')])}>{roundR(featureProps[scenarioField('simmet')])} ({pct(featureProps[scenarioField('simmet')], featureProps.baseline_at_mmet)}%)</td></tr>
+          {/if}
+          <tr><td>Change in CO₂e (t/yr)</td><td>{fmtOne(Number(featureProps[scenarioField('sico2')] ?? 0) / 1000)}</td></tr>
         {/if}
       </tbody>
     </table>
@@ -147,8 +166,8 @@
         {:else}
           <tr><td>Cyclists (scenario)</td><td>{fmtInt(scenarioCyclists)} ({pct(scenarioCyclists, featureProps.all)}%)</td></tr>
           <tr><td>Change in drivers</td><td>{fmtInt(featureProps[scenarioField('sid')])}</td></tr>
-          <tr><td>Change in YLLs/yr</td><td>{fmtTwo(featureProps[scenarioField('siyll')])} ({money(featureProps[scenarioField('sivalueyll')])})</td></tr>
-          <tr><td>Change in days sick leave/yr</td><td>{fmtOne(featureProps[scenarioField('sisickdays')])} ({money(featureProps[scenarioField('sivaluesick')])})</td></tr>
+          <tr><td>Change in YLLs/yr</td><td class:neg={isNeg(featureProps[scenarioField('sivalueyll')])}>{fmtTwo(featureProps[scenarioField('siyll')])} ({money(featureProps[scenarioField('sivalueyll')])})</td></tr>
+          <tr><td>Change in days sick leave/yr</td><td class:neg={isNeg(featureProps[scenarioField('sivaluesick')])}>{fmtOne(featureProps[scenarioField('sisickdays')])} ({money(featureProps[scenarioField('sivaluesick')])})</td></tr>
           <tr><td>Change in CO₂e (t/yr)</td><td>{fmtOne(Number(featureProps[scenarioField('sico2')] ?? 0) / 1000)}</td></tr>
         {/if}
         <tr><td>{isDesire ? 'Distance (km)' : 'Fast route distance (km)'}</td><td>{fmtOne(isDesire ? featureProps.e_dist_km : featureProps.rf_dist_km)}</td></tr>
@@ -160,8 +179,13 @@
     <div class="popup-subheading">{isBaseline ? `${scenarioLabel} (baseline)` : `Scenario: ${scenarioLabel}`}</div>
     <div class="popup-place">{featureProps.geo_name1} – {featureProps.geo_name2}</div>
     <table><tbody>
+      <tr><td>Total commuters</td><td>{fmtInt(featureProps.all)}</td></tr>
+      <tr><td>Cyclists (baseline)</td><td>{fmtInt(featureProps.bicycle)} ({pct(featureProps.bicycle, featureProps.all)}%)</td></tr>
+      {#if !isBaseline}
+        <tr><td>Cyclists (scenario)</td><td>{fmtInt(scenarioCyclists)} ({pct(scenarioCyclists, featureProps.all)}%)</td></tr>
+      {/if}
       <tr><td>Quieter route distance (km)</td><td>{fmtOne(featureProps.rq_dist_km)}</td></tr>
-      <tr><td>Distance compared with fastest route (%)</td><td>{fmtOne((Number(featureProps.dist_rq_rf ?? 0) * 100) - 100)}</td></tr>
+      <tr><td>Distance compared with fastest route (%)</td><td>{quietDetourPct > 0 ? `+${fmtOne(quietDetourPct)}` : fmtOne(quietDetourPct)}</td></tr>
       <tr><td>Hilliness (av. gradient, %)</td><td>{fmtOne(featureProps.rq_avslope_perc)}</td></tr>
     </tbody></table>
   {:else if isRnet}
@@ -170,10 +194,14 @@
     <div class="popup-place">{appState.regionPretty} · {isSchool ? 'School travel' : 'Commuting'} · LSOA</div>
     {#if featureProps.local_id}<div class="popup-meta">Segment {featureProps.local_id}</div>{/if}
     <table><tbody>
-      <tr><td>Cyclists (baseline)</td><td>{fmtInt(featureProps.bicycle)}</td></tr>
+      <tr><td>Cyclists (baseline)</td><td>{isSchool ? smallCell(featureProps.bicycle) : fmtInt(featureProps.bicycle)}</td></tr>
       {#if !isBaseline}
-        <tr><td>Cyclists (scenario)</td><td>{fmtInt(scenarioCyclists)}</td></tr>
-        <tr><td>Ratio (scenario / baseline)</td><td>{Number(featureProps.bicycle ?? 0) > 0 ? (scenarioCyclists / Number(featureProps.bicycle)).toFixed(2) : '–'}</td></tr>
+        <tr><td>Cyclists (scenario)</td><td>{isSchool ? smallCell(scenarioCyclists) : fmtInt(scenarioCyclists)}</td></tr>
+        {#if isSchool}
+          <tr><td>Change in cyclists</td><td>{fmtInt(featureProps[scenarioField('sic')])}</td></tr>
+        {:else}
+          <tr><td>Ratio (scenario / baseline)</td><td>{Number(featureProps.bicycle ?? 0) > 0 ? (scenarioCyclists / Number(featureProps.bicycle)).toFixed(2) : '–'}</td></tr>
+        {/if}
       {/if}
     </tbody></table>
   {/if}
@@ -191,4 +219,5 @@
   td { padding: 2px 0; vertical-align: top; overflow-wrap: break-word; }
   td:first-child { width: 64%; color: #222; padding-right: 12px; }
   td:last-child { width: 36%; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: #111; }
+  td.neg { color: #dc2626; font-weight: 600; }
 </style>

@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { appState, BASEMAPS, scenariosForPurpose } from '../state.svelte';
-  import type { BasemapId, Geography, LayerId, Purpose, Scenario } from '../types';
+  import { appState, BASEMAPS, LINE_ORDERS, scenariosForPurpose } from '../state.svelte';
+  import type { BasemapId, Geography, LayerId, LineOrder, Purpose, Scenario } from '../types';
 
   type FlowId = 'none' | 'desire' | 'fast' | 'fastquiet' | 'rnet' | 'destinations';
+
+  let fastQuietMode = $state(false);
 
   const COMMUTE_FLOWS: { id: FlowId; label: string; layers: LayerId[] }[] = [
     { id: 'none', label: 'None', layers: [] },
@@ -37,6 +39,7 @@
   const flowId = $derived.by<FlowId>(() => {
     const active = appState.layers.filter((layer) => layer !== 'zones').sort().join(',');
     if (active === 'rnet') return 'rnet';
+    if (active === 'fast,quiet' || active === 'quiet' || (fastQuietMode && active === 'fast')) return 'fastquiet';
     return flows.find((flow) => flow.layers.slice().sort().join(',') === active)?.id ?? 'none';
   });
 
@@ -67,10 +70,22 @@
 
   function setFlow(event: Event) {
     const selected = (event.target as HTMLSelectElement).value as FlowId;
+    fastQuietMode = selected === 'fastquiet';
     const flow = flows.find((item) => item.id === selected)!;
     const zones = appState.isLayerActive('zones') ? ['zones'] as LayerId[] : [];
     appState.setFreezeLines(false);
     appState.setLayers([...zones, ...flow.layers]);
+  }
+
+  function toggleRouteSublayer(layer: 'fast' | 'quiet', checked: boolean) {
+    const current = new Set(appState.layers);
+    if (checked) current.add(layer);
+    else current.delete(layer);
+    // Keep at least one route layer active in Fast & Quieter mode
+    if (!current.has('fast') && !current.has('quiet')) {
+      current.add(layer === 'fast' ? 'quiet' : 'fast');
+    }
+    appState.setLayers([...current]);
   }
 
   function setZones(event: Event) {
@@ -111,11 +126,58 @@
     </select>
   </div>
 
+  {#if flowId === 'fastquiet'}
+    <div class="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700">
+      <label class="flex cursor-pointer items-center gap-1.5 font-medium">
+        <input
+          type="checkbox"
+          checked={appState.isLayerActive('fast')}
+          onchange={(e) => toggleRouteSublayer('fast', (e.target as HTMLInputElement).checked)}
+          class="h-3.5 w-3.5 cursor-pointer rounded border-slate-300 accent-sky-600"
+        />
+        <span class="inline-block h-1 w-3 rounded bg-[#800080]"></span>
+        Fast routes
+      </label>
+      <label class="flex cursor-pointer items-center gap-1.5 font-medium">
+        <input
+          type="checkbox"
+          checked={appState.isLayerActive('quiet')}
+          onchange={(e) => toggleRouteSublayer('quiet', (e.target as HTMLInputElement).checked)}
+          class="h-3.5 w-3.5 cursor-pointer rounded border-slate-300 accent-sky-600"
+        />
+        <span class="inline-block w-3 border-b-2 border-dashed border-[#006400]"></span>
+        Quieter routes
+      </label>
+    </div>
+  {/if}
+
   {#if flowId === 'desire' || flowId === 'fast' || flowId === 'fastquiet'}
-    <div class="flex items-center gap-2">
-      <label for="top-n" class="shrink-0 text-xs font-semibold text-slate-700">Top N lines</label>
-      <input id="top-n" type="range" min="10" max="100" step="5" value={appState.n} oninput={(event) => appState.setN(Number((event.target as HTMLInputElement).value))} class="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded bg-slate-200 accent-sky-600" />
-      <output for="top-n" class="w-7 text-right font-mono text-xs text-slate-600">{appState.n}</output>
+    <div class="space-y-1">
+      <div class="flex items-center justify-between">
+        <label for="top-n" class="text-xs font-semibold text-slate-700">
+          {appState.scenario === 'base' || appState.lineOrder === 'slc'
+            ? 'Top N lines (most cycled)'
+            : 'Top N lines'}
+        </label>
+        <output for="top-n" class="font-mono text-xs font-semibold text-sky-700">{appState.n}</output>
+      </div>
+      <input id="top-n" type="range" min="1" max="200" step="1" value={appState.n} oninput={(event) => appState.setN(Number((event.target as HTMLInputElement).value))} class="h-1.5 w-full cursor-pointer appearance-none rounded bg-slate-200 accent-sky-600" />
+    </div>
+  {/if}
+
+  {#if (flowId === 'desire' || flowId === 'fast' || flowId === 'fastquiet') && appState.scenario !== 'base'}
+    <div class="space-y-1">
+      <label for="line-order" class="block text-xs font-semibold text-slate-700">Order lines by</label>
+      <select
+        id="line-order"
+        value={appState.lineOrder}
+        onchange={(event) => appState.setLineOrder((event.target as HTMLSelectElement).value as LineOrder)}
+        class="w-full cursor-pointer rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 shadow-xs focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+      >
+        {#each LINE_ORDERS as order (order.id)}
+          <option value={order.id}>{order.name}</option>
+        {/each}
+      </select>
     </div>
   {/if}
 
@@ -166,7 +228,7 @@
     <label for="basemap" class="block text-xs font-semibold text-slate-700">Map Base</label>
     <select id="basemap" value={appState.basemap} onchange={setBasemap} class="w-full cursor-pointer rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 shadow-xs focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
       {#each BASEMAPS as basemap (basemap.id)}
-        <option value={basemap.id}>{basemap.id === 'positron' ? 'Roadmap (Black & White)' : basemap.id === 'cyclosm' ? 'Roadmap (OpenCycleMap)' : 'Satellite'}</option>
+        <option value={basemap.id}>{basemap.name}</option>
       {/each}
     </select>
   </div>

@@ -102,7 +102,7 @@
       attributionControl: false
     });
     mapInstance.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-    mapInstance.on('load', () => {
+    mapInstance.on('style.load', () => {
       mapInstance.addSource('regions-source', {
         type: 'vector',
         url: getPMTilesUrl('/data/regions/regions.pmtiles')

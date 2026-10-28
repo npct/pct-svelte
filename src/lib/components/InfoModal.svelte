@@ -47,7 +47,7 @@
 
       <div class="mb-4">
         <h2 id="modal-title" class="text-lg font-bold text-slate-900">Propensity to Cycle Tool</h2>
-        <p class="text-xs text-slate-500">West Yorkshire Combined Authority Dashboard</p>
+        <p class="text-xs text-slate-500">{appState.regionPretty} Dashboard</p>
       </div>
 
       <div class="space-y-3 text-sm text-slate-600 leading-relaxed">

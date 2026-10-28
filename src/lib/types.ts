@@ -23,7 +23,9 @@ export interface LayerConfig {
   sourceLayer: string;
 }
 
-export type BasemapId = 'positron' | 'satellite' | 'cyclosm';
+export type BasemapId = 'positron' | 'satellite' | 'cyclosm' | 'hilliness' | 'imd';
+
+export type LineOrder = 'slc' | 'sic' | 'sivaluecomb' | 'sico2';
 
 export interface BasemapOption {
   id: BasemapId;
@@ -43,6 +45,7 @@ export interface AppState {
   layers: LayerId[];
   basemap: BasemapId;
   n: number;
+  lineOrder: LineOrder;
 }
 
 export interface Toast {
